@@ -29,6 +29,7 @@ app.get("/", (req, res) => {
 
 // Routes
 app.use("/auth", require("./routes/auth"));
+app.use("/loans", require("./routes/loans"));
 
 // Global Error Fallback
 app.use((err, req, res, next) => {
