@@ -1,4 +1,5 @@
 import AxiosClientApi from "./axios.services";
+import Constant from "../utils/constant";
 
 export const loginApi = (credentials) => {
   return AxiosClientApi.post("/auth/login", credentials);
@@ -44,4 +45,31 @@ export const getPartnerExposureApi = () => {
 
 export const triggerRiskCronApi = () => {
   return AxiosClientApi.post("/risk/run-cron");
+};
+
+// Phase 5: PDF Document Download Helpers
+export const downloadDocument = async (endpoint, defaultFilename) => {
+  try {
+    const token = localStorage.getItem(Constant.TOKEN_KEY);
+    const response = await fetch(`${Constant.API_BASE_URL}${endpoint}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to generate PDF document.");
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = defaultFilename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("PDF Download error:", err);
+    alert("Failed to download PDF document: " + err.message);
+  }
 };

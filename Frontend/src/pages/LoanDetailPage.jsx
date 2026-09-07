@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getLoanByIdApi, commitFundingApi, payInstallmentApi, getRepaymentLedgerApi } from "../Api/api.services";
+import { getLoanByIdApi, commitFundingApi, payInstallmentApi, getRepaymentLedgerApi, downloadDocument } from "../Api/api.services";
 import { useSocket } from "../hooks/useSocket";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -19,6 +19,8 @@ import {
   Table,
   FileSpreadsheet,
   Check,
+  Download,
+  FileText,
 } from "lucide-react";
 
 export const LoanDetailPage = () => {
@@ -354,14 +356,37 @@ export const LoanDetailPage = () => {
             </p>
 
             {loan.status === "FULLY_FUNDED" || loan.status === "CLOSED" || loan.status === "AT_RISK" ? (
-              <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-sm text-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <span className="font-bold">
-                  {loan.status === "CLOSED" ? "Facility Fully Closed" : "Facility 100% Fully Funded!"}
-                </span>
-                <p className="text-xs opacity-80 mt-1">
-                  Amortization schedule generated. No further commitments accepted.
-                </p>
+              <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-sm text-center space-y-3">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                <div>
+                  <span className="font-bold">
+                    {loan.status === "CLOSED" ? "Facility Fully Closed" : "Facility 100% Fully Funded!"}
+                  </span>
+                  <p className="text-xs opacity-80 mt-1">
+                    Amortization schedule & PDF documents generated.
+                  </p>
+                </div>
+
+                {/* PDF Download Buttons */}
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => downloadDocument(`/documents/sanction-letter/${loan.id}`, `Sanction_Letter_${loan.id}.pdf`)}
+                    className="w-full py-2 px-3 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Download Sanction Letter (PDF)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => downloadDocument(`/documents/repayment-statement/${loan.id}`, `Repayment_Statement_${loan.id}.pdf`)}
+                    className="w-full py-2 px-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Repayment Statement (PDF)
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleCommitSubmit} className="space-y-4">

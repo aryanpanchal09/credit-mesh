@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "test": "jest --runInBand --detectOpenHandles --forceExit",
     "db:create": "node scripts/create_db.js",
     "db:seed": "sequelize db:seed:all"
   },
@@ -25,7 +26,9 @@
     "uuid": "^11.1.0"
   },
   "devDependencies": {
+    "jest": "^29.7.0",
     "nodemon": "^2.0.20",
-    "sequelize-cli": "^6.6.2"
+    "sequelize-cli": "^6.6.2",
+    "supertest": "^6.3.4"
   }
 }
