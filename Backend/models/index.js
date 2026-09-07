@@ -6,7 +6,8 @@ const Sequelize = require("sequelize");
 const process = require("process");
 const basename = path.basename(__filename);
 const env = process.env.NODE_ENV || "development";
-const config = require(__dirname + "/../config/postgres/db.js")[env];
+const dbConfigs = require(__dirname + "/../config/postgres/db.js");
+const config = dbConfigs[env] || dbConfigs.development || dbConfigs.local;
 const db = {};
 
 let sequelize;

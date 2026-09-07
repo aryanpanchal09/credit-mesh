@@ -20,6 +20,15 @@ const dbConfig = {
     dialect: config.pgdialect,
     logging: false,
   },
+  test: {
+    username: config.pguser,
+    password: config.pgpassword,
+    database: config.pgdatabase,
+    host: config.pghost,
+    port: config.pgport,
+    dialect: config.pgdialect,
+    logging: false,
+  },
   production: {
     username: config.pguser,
     password: config.pgpassword,
