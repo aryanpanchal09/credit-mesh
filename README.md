@@ -29,8 +29,10 @@ CreditMesh is a multi-tenant, real-time loan syndication and disbursement platfo
 - **Graceful Reconnection**: Client automatically resyncs state on socket reconnect.
 
 ### 4. Proportional Repayments & Immutable Audit Ledger
-- **Proportional Repayment Split**: Borrower EMI repayments are automatically split across funding partners based on their contribution ratio:
-  $$\text{partner\_share} = \text{installment\_amount} \times \left(\frac{\text{commitment.amount}}{\text{total\_loan\_funded}}\right)$$
+- **Proportional Repayment Split**: Borrower EMI repayments are automatically split across funding partners based on their contribution ratio.
+  $$
+  \text{partner\_share} = \text{installment\_amount} \times \left(\frac{\text{commitment.amount}}{\text{total\_loan\_funded}}\right)
+  $$
 - **Auditable Ledger**: Each distribution creates an immutable record in `RepaymentLedger`.
 
 ### 5. Automated Overdue Risk Monitoring
