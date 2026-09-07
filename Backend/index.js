@@ -4,6 +4,7 @@ const http = require("http");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { initSocket } = require("./utils/socket");
+const { initRiskCron } = require("./utils/cron");
 const { sequelize } = require("./models");
 
 dotenv.config();
@@ -30,6 +31,8 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/auth", require("./routes/auth"));
 app.use("/loans", require("./routes/loans"));
+app.use("/repayments", require("./routes/repayments"));
+app.use("/risk", require("./routes/risk"));
 
 // Global Error Fallback
 app.use((err, req, res, next) => {
@@ -42,6 +45,7 @@ server.listen(PORT, async () => {
   try {
     await sequelize.authenticate();
     console.log("[CreditMesh API] PostgreSQL database connection established successfully.");
+    initRiskCron();
   } catch (error) {
     console.error("[CreditMesh API] Unable to connect to the database:", error);
   }

@@ -7,6 +7,8 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoansPage } from "./pages/LoansPage";
 import { LoanDetailPage } from "./pages/LoanDetailPage";
+import { RiskDashboardPage } from "./pages/RiskDashboardPage";
+import { PartnerExposurePage } from "./pages/PartnerExposurePage";
 import { Navbar } from "./components/Navbar";
 
 const AppLayout = () => {
@@ -33,6 +35,8 @@ export default function App() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/loans" element={<LoansPage />} />
               <Route path="/loans/:id" element={<LoanDetailPage />} />
+              <Route path="/risk" element={<RiskDashboardPage />} />
+              <Route path="/exposure" element={<PartnerExposurePage />} />
             </Route>
           </Route>
 

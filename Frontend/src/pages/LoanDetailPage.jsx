@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getLoanByIdApi, commitFundingApi } from "../Api/api.services";
+import { getLoanByIdApi, commitFundingApi, payInstallmentApi, getRepaymentLedgerApi } from "../Api/api.services";
 import { useSocket } from "../hooks/useSocket";
 import { useAuth } from "../auth/AuthContext";
 import {
@@ -17,6 +17,8 @@ import {
   Sparkles,
   Loader2,
   Table,
+  FileSpreadsheet,
+  Check,
 } from "lucide-react";
 
 export const LoanDetailPage = () => {
@@ -25,11 +27,13 @@ export const LoanDetailPage = () => {
   const { socket, joinLoanRoom, leaveLoanRoom } = useSocket();
 
   const [loan, setLoan] = useState(null);
+  const [ledgerRecords, setLedgerRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [commitAmount, setCommitAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState(null); // { type: 'success'|'error', text: '' }
-  const [activeTab, setActiveTab] = useState("commitments"); // 'commitments' | 'amortization'
+  const [isPayingInst, setIsPayingInst] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [activeTab, setActiveTab] = useState("commitments"); // 'commitments' | 'amortization' | 'ledger'
 
   const fetchLoanDetail = async () => {
     try {
@@ -38,11 +42,23 @@ export const LoanDetailPage = () => {
       if (res && res.data) {
         setLoan(res.data);
       }
+      fetchLedger();
     } catch (err) {
       console.error("[LoanDetailPage] Fetch error:", err);
       setMessage({ type: "error", text: "Failed to load loan details." });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLedger = async () => {
+    try {
+      const res = await getRepaymentLedgerApi(id);
+      if (res && res.data) {
+        setLedgerRecords(res.data);
+      }
+    } catch (err) {
+      console.error("[LoanDetailPage] Fetch ledger error:", err);
     }
   };
 
@@ -65,11 +81,9 @@ export const LoanDetailPage = () => {
     if (!socket) return;
 
     const handleFundingUpdate = (data) => {
-      console.log("[LoanDetailPage] Socket funding_updated received:", data);
       if (data.loan_id.toString() === id.toString()) {
         setLoan((prevLoan) => {
           if (!prevLoan) return prevLoan;
-
           const updatedCommitments = data.new_commitment
             ? [data.new_commitment, ...(prevLoan.commitments || [])]
             : prevLoan.commitments;
@@ -84,17 +98,24 @@ export const LoanDetailPage = () => {
           };
         });
 
-        // Re-fetch loan details if fully funded to load generated amortization schedule
         if (data.status === "FULLY_FUNDED") {
           fetchLoanDetail();
         }
       }
     };
 
+    const handleRepaymentProcessed = (data) => {
+      if (data.loan_id.toString() === id.toString()) {
+        fetchLoanDetail();
+      }
+    };
+
     socket.on("funding_updated", handleFundingUpdate);
+    socket.on("repayment_processed", handleRepaymentProcessed);
 
     return () => {
       socket.off("funding_updated", handleFundingUpdate);
+      socket.off("repayment_processed", handleRepaymentProcessed);
     };
   }, [socket, id]);
 
@@ -116,13 +137,10 @@ export const LoanDetailPage = () => {
       return;
     }
 
-    // Optimistic UI state backup
     const previousLoanState = { ...loan };
 
     try {
       setIsSubmitting(true);
-
-      // Optimistic update
       const newFunded = loan.funded_amount + numericAmount;
       const newRemaining = Math.max(0, loan.loan_amount - newFunded);
       const newPercentage = Math.min(100, parseFloat(((newFunded / loan.loan_amount) * 100).toFixed(2)));
@@ -143,22 +161,43 @@ export const LoanDetailPage = () => {
           text: res.message || `Successfully committed ₹${numericAmount.toLocaleString()} to facility!`,
         });
         setCommitAmount("");
-        fetchLoanDetail(); // Refresh authoritative DB state
+        fetchLoanDetail();
       } else {
-        // Rollback optimistic update
         setLoan(previousLoanState);
         setMessage({ type: "error", text: res?.message || "Commitment rejected by server." });
       }
     } catch (err) {
-      // Rollback optimistic update on failure
       setLoan(previousLoanState);
-      console.error("[LoanDetailPage] Commit error:", err);
       setMessage({
         type: "error",
         text: err?.message || "Race condition or server error. Commitment rejected.",
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePayInstallment = async (installmentNo) => {
+    try {
+      setIsPayingInst(installmentNo);
+      setMessage(null);
+
+      const res = await payInstallmentApi(id, installmentNo);
+
+      if (res && res.status === 200) {
+        setMessage({
+          type: "success",
+          text: res.message || `Installment #${installmentNo} paid and split proportionally across partners!`,
+        });
+        fetchLoanDetail();
+      } else {
+        setMessage({ type: "error", text: res?.message || "Repayment failed." });
+      }
+    } catch (err) {
+      console.error("[LoanDetailPage] Repayment Error:", err);
+      setMessage({ type: "error", text: err?.message || "Repayment failed." });
+    } finally {
+      setIsPayingInst(null);
     }
   };
 
@@ -235,8 +274,12 @@ export const LoanDetailPage = () => {
               </span>
               <span
                 className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold uppercase ${
-                  loan.status === "FULLY_FUNDED"
+                  loan.status === "FULLY_FUNDED" || loan.status === "ACTIVE"
                     ? "bg-emerald-950/80 text-emerald-400 border-emerald-800"
+                    : loan.status === "AT_RISK"
+                    ? "bg-red-950/80 text-red-400 border-red-800 animate-pulse font-bold"
+                    : loan.status === "CLOSED"
+                    ? "bg-slate-800 text-slate-300 border-slate-700"
                     : "bg-cyan-950/80 text-cyan-400 border-cyan-800"
                 }`}
               >
@@ -310,10 +353,12 @@ export const LoanDetailPage = () => {
               Participate in this co-lending pool. Transaction uses row-level database locking to prevent over-funding.
             </p>
 
-            {loan.status === "FULLY_FUNDED" ? (
+            {loan.status === "FULLY_FUNDED" || loan.status === "CLOSED" || loan.status === "AT_RISK" ? (
               <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-sm text-center">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <span className="font-bold">Facility 100% Fully Funded!</span>
+                <span className="font-bold">
+                  {loan.status === "CLOSED" ? "Facility Fully Closed" : "Facility 100% Fully Funded!"}
+                </span>
                 <p className="text-xs opacity-80 mt-1">
                   Amortization schedule generated. No further commitments accepted.
                 </p>
@@ -400,13 +445,13 @@ export const LoanDetailPage = () => {
           </div>
         </div>
 
-        {/* Right Column: Tabs (Commitments History vs Amortization Schedule) */}
+        {/* Right Column: Tabs (Commitments vs Amortization Schedule vs Proportional Ledger) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Tab Selection Header */}
-          <div className="flex border-b border-slate-800 gap-4">
+          <div className="flex border-b border-slate-800 gap-4 overflow-x-auto">
             <button
               onClick={() => setActiveTab("commitments")}
-              className={`pb-3 font-semibold text-sm transition border-b-2 flex items-center gap-2 cursor-pointer ${
+              className={`pb-3 font-semibold text-sm transition border-b-2 flex items-center gap-2 shrink-0 cursor-pointer ${
                 activeTab === "commitments"
                   ? "border-cyan-500 text-cyan-400"
                   : "border-transparent text-slate-400 hover:text-slate-200"
@@ -418,14 +463,29 @@ export const LoanDetailPage = () => {
 
             <button
               onClick={() => setActiveTab("amortization")}
-              className={`pb-3 font-semibold text-sm transition border-b-2 flex items-center gap-2 cursor-pointer ${
+              className={`pb-3 font-semibold text-sm transition border-b-2 flex items-center gap-2 shrink-0 cursor-pointer ${
                 activeTab === "amortization"
                   ? "border-cyan-500 text-cyan-400"
                   : "border-transparent text-slate-400 hover:text-slate-200"
               }`}
             >
               <Table className="w-4 h-4" />
-              Amortization Schedule {loan.status === "FULLY_FUNDED" && "(Generated)"}
+              Amortization Schedule
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("ledger");
+                fetchLedger();
+              }}
+              className={`pb-3 font-semibold text-sm transition border-b-2 flex items-center gap-2 shrink-0 cursor-pointer ${
+                activeTab === "ledger"
+                  ? "border-cyan-500 text-cyan-400"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Auditable Repayment Ledger ({ledgerRecords.length})
             </button>
           </div>
 
@@ -471,7 +531,7 @@ export const LoanDetailPage = () => {
                 </div>
               )}
             </div>
-          ) : (
+          ) : activeTab === "amortization" ? (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
               <h3 className="font-bold text-white text-base">Server-Generated Amortization Schedule</h3>
 
@@ -495,6 +555,7 @@ export const LoanDetailPage = () => {
                         <th className="pb-3 text-right">Interest</th>
                         <th className="pb-3 text-right">Balance</th>
                         <th className="pb-3 text-center">Status</th>
+                        <th className="pb-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -515,9 +576,85 @@ export const LoanDetailPage = () => {
                             ₹{parseFloat(item.remaining_balance).toLocaleString()}
                           </td>
                           <td className="py-3 text-center">
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold uppercase">
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-semibold uppercase ${
+                                item.status === "PAID"
+                                  ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
+                                  : "bg-slate-800 text-slate-300 border border-slate-700"
+                              }`}
+                            >
                               {item.status}
                             </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            {item.status === "PENDING" ? (
+                              <button
+                                onClick={() => handlePayInstallment(item.installment_no)}
+                                disabled={isPayingInst === item.installment_no}
+                                className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-bold transition cursor-pointer disabled:opacity-50"
+                              >
+                                {isPayingInst === item.installment_no ? "Splitting..." : "Pay EMI"}
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-emerald-400 flex items-center justify-end gap-1 font-semibold">
+                                <Check className="w-3 h-3" /> Paid
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Auditable Repayment Ledger Tab */
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-base">Immutable Repayment Audit Ledger</h3>
+                  <p className="text-xs text-slate-400">
+                    Proportional distribution log automatically split across lending partners.
+                  </p>
+                </div>
+              </div>
+
+              {ledgerRecords.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 text-sm">
+                  No repayment ledger entries recorded yet. Pay an EMI installment above to generate proportional ledger logs.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                        <th className="pb-3">Inst #</th>
+                        <th className="pb-3">Lending Tenant</th>
+                        <th className="pb-3 text-right">Principal Split</th>
+                        <th className="pb-3 text-right">Interest Split</th>
+                        <th className="pb-3 text-right">Total Partner Payout</th>
+                        <th className="pb-3 text-right">Payment Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {ledgerRecords.map((r) => (
+                        <tr key={r.id} className="hover:bg-slate-850/50">
+                          <td className="py-3 font-bold text-slate-300">#{r.installment_no}</td>
+                          <td className="py-3 font-semibold text-cyan-400">
+                            {r.tenant?.name || "Lending Partner"} ({r.tenant?.code})
+                          </td>
+                          <td className="py-3 text-right text-emerald-400 font-semibold">
+                            ₹{parseFloat(r.principal_paid).toLocaleString()}
+                          </td>
+                          <td className="py-3 text-right text-amber-400 font-semibold">
+                            ₹{parseFloat(r.interest_paid).toLocaleString()}
+                          </td>
+                          <td className="py-3 text-right font-extrabold text-white text-sm">
+                            ₹{parseFloat(r.total_paid).toLocaleString()}
+                          </td>
+                          <td className="py-3 text-right text-slate-400">
+                            {new Date(r.payment_date).toLocaleString()}
                           </td>
                         </tr>
                       ))}

@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { Shield, LayoutDashboard, Coins, LogOut, Wifi, WifiOff } from "lucide-react";
+import { Shield, LayoutDashboard, Coins, ShieldAlert, Building2, LogOut, Wifi, WifiOff } from "lucide-react";
 import { useSocket } from "../hooks/useSocket";
 
 export const Navbar = () => {
@@ -12,6 +12,8 @@ export const Navbar = () => {
   const navLinks = [
     { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { label: "Loan Syndication", path: "/loans", icon: Coins },
+    { label: "Risk Analyst", path: "/risk", icon: ShieldAlert },
+    { label: "Partner Exposure", path: "/exposure", icon: Building2 },
   ];
 
   return (
@@ -35,7 +37,7 @@ export const Navbar = () => {
                   to={link.path}
                   className={`px-3.5 py-2 rounded-xl text-sm font-medium transition flex items-center gap-2 ${
                     isActive
-                      ? "bg-cyan-950/80 text-cyan-400 border border-cyan-800/80"
+                      ? "bg-cyan-950/80 text-cyan-400 border border-cyan-800/80 font-bold"
                       : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                   }`}
                 >
